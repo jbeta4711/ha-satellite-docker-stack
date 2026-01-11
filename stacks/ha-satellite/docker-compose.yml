@@ -1,0 +1,104 @@
+version: "3.8"
+
+services:
+  snapclient:
+    image: local/snapclient:latest
+    container_name: ha-snapclient
+    restart: unless-stopped
+    devices:
+      - /dev/snd:/dev/snd
+    group_add:
+      #- audio
+      #getent group audio | cut -d: -f3
+      - "29"
+    ipc: host  # Erlaubt den Zugriff auf die ALSA-Shared-Memory-Bereiche des Hosts
+    volumes:
+      - /etc/asound.conf:/etc/asound.conf:ro
+      - /dev/snd:/dev/snd
+      - /dev/shm:/dev/shm
+    environment:
+      TZ: "Europe/Berlin"
+      ALSA_PCM_DEVICE: "snap_out"
+    command: [
+      "--player=alsa",
+      "--soundcard=snap_out",
+      "--hostID=wohnzimmer-pi",
+      "tcp://192.168.0.15:1704"
+    ]
+    networks: [ha-audio]
+
+  openwakeword:
+    image: rhasspy/wyoming-openwakeword:latest
+    container_name: ha-openwakeword
+    restart: unless-stopped
+    devices:
+      - /dev/snd:/dev/snd
+    group_add:
+      - "29"
+    volumes:
+      - /home/admin/ha-stack/ha-satellite/wakeword:/data
+    environment:
+      - TZ=Europe/Berlin
+      - RATE=16000
+    ports:
+      - "10400:10400"
+    networks: [ha-audio]
+
+  ha-satellite:
+    image: wyoming-satellite:local
+    container_name: ha-satellite
+    restart: unless-stopped
+    depends_on:
+      - openwakeword
+      - ha-satellite-leds
+    devices:
+      - /dev/snd:/dev/snd
+    group_add:
+      - "29"
+    ipc: host
+    environment:
+      - TZ=Europe/Berlin
+      - ALSA_PCM_DEVICE=tts_out
+    volumes:
+      - /etc/asound.conf:/etc/asound.conf:ro
+    command: [
+      "--name", "Wohnzimmer",
+      "--uri", "tcp://0.0.0.0:10700",
+      "--event-uri", "tcp://ha-satellite-leds:10500",
+      "--mic-command", "arecord -D mic_in -r 16000 -c 1 -f S16_LE -t raw",
+      "--snd-command", "aplay -D tts_out -r 22050 -c 1 -f S16_LE -t raw",
+      "--mic-noise-suppression", "2", # Reduziert Hintergrundrauschen (Stufe 1-4)
+      "--mic-auto-gain", "5",       # Verstärkt leise Stimmen (Stufe 0-31)
+      "--vad", # VAD aktivieren für lokales Erkennen von Gesprächsende
+      "--vad-threshold", "0.4", # Nach wie vielen Sekunden Stille soll er aufhören?
+      "--vad-wake-word-timeout", "10", # Nach wie vielen Sekunden soll er den Stream spätestens abbrechen? (Sicherhet)
+      "--debug",
+      "--wake-word-name", "hey_jarvis",
+      "--wake-uri", "tcp://openwakeword:10400"
+    ]
+    ports:
+      - "10700:10700"
+    networks: [ha-audio]
+
+  ha-satellite-leds:
+    image: wyoming-satellite-leds:local
+    container_name: ha-satellite-leds
+    restart: unless-stopped
+    devices:
+      - /dev/spidev0.0:/dev/spidev0.0
+      - /dev/spidev0.1:/dev/spidev0.1
+      - /dev/gpiomem:/dev/gpiomem
+      - /dev/gpiochip0:/dev/gpiochip0
+      - /dev/gpiochip1:/dev/gpiochip1
+      - /dev/gpiochip4:/dev/gpiochip4
+    environment:
+      - TZ=Europe/Berlin
+    working_dir: /app
+    volumes:
+      - /home/admin/wyoming-satellite/examples:/app/examples:ro
+    command: ["--uri", "tcp://0.0.0.0:10500"]
+    networks: [ha-audio]
+
+networks:
+  ha-audio:
+    driver: bridge

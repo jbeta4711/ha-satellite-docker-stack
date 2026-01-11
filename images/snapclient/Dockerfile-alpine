@@ -1,0 +1,20 @@
+FROM alpine:latest
+
+# Install required packages (snapcast client + audio tools)
+RUN apk add --no-cache \
+    snapcast \
+    alsa-lib \
+    alsa-utils \
+    tzdata
+
+# Create default config directory
+RUN mkdir -p /config
+
+# Expose snapclient port (not strictly required)
+EXPOSE 1704/tcp
+EXPOSE 1705/tcp
+
+# Use ALSA device by default (can be overridden in compose)
+ENV SNAPCLIENT_OPTS="--host snapserver --soundcard plughw:0,0"
+
+CMD ["sh", "-c", "snapclient $SNAPCLIENT_OPTS"]
