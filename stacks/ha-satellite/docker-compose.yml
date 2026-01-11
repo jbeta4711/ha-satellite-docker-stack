@@ -4,7 +4,7 @@ services:
   snapclient:
     build:
       context: ../../
-      dockerfile: images/snapclient/Dockerfile-alpine
+      dockerfile: images/snapclient/Dockerfile
     image: local/snapclient:latest
     container_name: ha-snapclient
     restart: unless-stopped
@@ -24,7 +24,8 @@ services:
       --soundcard ${ALSA_SNAP_DEVICE} 
       --hostID ${SATELLITE_NAME}-pi 
       tcp://${SNAPSERVER_HOST}:${SNAPSERVER_PORT}
-    networks: [ha-audio]
+    networks:
+      - ha-audio
 
   openwakeword:
     image: rhasspy/wyoming-openwakeword:latest
@@ -38,7 +39,8 @@ services:
       - TZ=Europe/Berlin
     ports:
       - "10400:10400"
-    networks: [ha-audio]
+    networks:
+      - ha-audio
 
   ha-satellite:
     build:
@@ -59,7 +61,6 @@ services:
       - TZ=Europe/Berlin
     volumes:
       - /etc/asound.conf:/etc/asound.conf:ro
-    # Hier nutzen wir Variablen für Name, Mic und Snd-Device
     command: >
       python3 -m wyoming_satellite
       --name "${SATELLITE_NAME}"
@@ -77,10 +78,11 @@ services:
       --debug
     ports:
       - "10700:10700"
-    networks: [ha-audio]
+    networks:
+      - ha-audio
 
   ha-satellite-leds:
-     build:
+    build:
       context: ../../
       dockerfile: images/wyoming-satellite-leds/Dockerfile
     image: wyoming-satellite-leds:local
@@ -99,7 +101,8 @@ services:
     volumes:
       - ${LED_EXAMPLES}:/app/examples:ro
     command: ["--uri", "tcp://0.0.0.0:10500"]
-    networks: [ha-audio]
+    networks:
+      - ha-audio
 
 networks:
   ha-audio:
