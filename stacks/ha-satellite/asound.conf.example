@@ -1,0 +1,54 @@
+# --- AUSGABE: Creative X-Fi (Karte 1) ---
+pcm.dmixed {
+    type dmix
+    ipc_key 1024
+    ipc_perm 0666
+    slave {
+        pcm "hw:1,0"
+        # S24_3LE ist das native 24-bit Format der X-Fi Surround 5.1
+        format S24_3LE 
+        rate 96000
+        period_size 2048
+        buffer_size 8192
+    }
+}
+
+pcm.snap_out {
+    type plug
+    slave.pcm "dmixed"
+}
+
+pcm.tts_out {
+    type plug
+    slave.pcm "dmixed"
+}
+
+
+# --- EINGABE: ReSpeaker 2-Mic HAT (Karte 4) ---
+pcm.respeaker_hw {
+    type dsnoop
+    ipc_key 2048
+    ipc_perm 0666
+    slave {
+        pcm "hw:4,0"
+        channels 2     # Die Hardware WILL 2 Kanäle
+        rate 16000
+        format S16_LE
+    }
+}
+
+# Wir nutzen das 'plug' Plugin als Wrapper um ALLES. 
+# Es kümmert sich um die Konvertierung von Mono/Stereo und Formaten.
+pcm.mic_in {
+    type plug
+    slave.pcm {
+        type route
+        slave.pcm "respeaker_hw"
+        # Hier definieren wir den Mix: 
+        # Beidseitiges Signal wird zu einem Mono-Kanal (0) zusammengefasst.
+        ttable {
+            0.0 0.5  # Linkes Mic auf Mono-Kanal
+            1.0 0.5  # Rechtes Mic auf Mono-Kanal
+        }
+    }
+}
