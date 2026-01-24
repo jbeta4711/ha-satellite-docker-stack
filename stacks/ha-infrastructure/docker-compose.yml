@@ -1,0 +1,48 @@
+version: "3.8"
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"        # ggf. nur intern? dann Port-Mapping entfernen
+      - "9001:9001"        # Websocket (falls benötigt)
+    volumes:
+      - /home/admin/ha-stack/mosquitto/config:/mosquitto/config
+      - /home/admin/ha-stack/mosquitto/data:/mosquitto/data
+      - /home/admin/ha-stack/mosquitto/log:/mosquitto/log
+
+  zigbee2mqtt:
+    image: koenkk/zigbee2mqtt:latest
+    container_name: zigbee2mqtt
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+    privileged: true
+    devices:
+      - /dev/serial/by-id/usb-ITEAD_SONOFF_Zigbee_3.0_USB_Dongle_Plus_V2_20230829140810-if00:/dev/ttyACM0
+    volumes:
+      - /home/admin/ha-stack/zigbee2mqtt/data:/app/data
+    environment:
+      - TZ=Europe/Berlin
+    ports:
+      - "8080:8080"        # UI; wenn nur lokal: weglassen oder via Proxy
+
+  socat-rs232:
+    image: alpine
+    container_name: socat-rs232
+    restart: unless-stopped
+    devices:
+      - /dev/serial/by-id/usb-1a86_USB2.0-Ser_-if00-port0:/dev/ttyUSB_RS232
+    command:
+      - sh
+      - -c
+      - |
+        apk add --no-cache socat &&
+        exec socat \
+          TCP-LISTEN:2000,reuseaddr,fork \
+          FILE:/dev/ttyUSB_RS232,raw,echo=0,b9600
+        "
+    ports:
+      - "2000:2000"
